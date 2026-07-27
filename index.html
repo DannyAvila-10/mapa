@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
+    <link rel="stylesheet" href="css/leaflet.css">
+    <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+    <link rel="stylesheet" href="css/L.Control.Locate.min.css">
+    <link rel="stylesheet" href="css/qgis2web.css">
+    <link rel="stylesheet" href="css/fontawesome-all.min.css">
+    <link rel="stylesheet" href="css/leaflet.photon.css">
+    <link rel="stylesheet" href="css/leaflet-measure.css">
+
+    <!-- Librería para el Gráfico de Dona -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+
+        /* ===== Navbar Superior ===== */
+        .top-navbar {
+            position: absolute; top: 0; left: 0; right: 0; height: 52px;
+            background: rgba(15, 23, 42, 0.97);
+            color: #fff; z-index: 2000; display: flex; align-items: center;
+            justify-content: space-between; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,0.08);
+            font-size: 12px;
+        }
+        .top-navbar .nav-left { display: flex; align-items: center; gap: 14px; color: #cbd5e1; font-weight: 600; }
+        .top-navbar .nav-left .coord-icon { color: #f43f5e; }
+        .top-navbar .nav-right { display: flex; align-items: center; gap: 8px; }
+        .nav-pill {
+            background: #1e293b; color: #e2e8f0; border: 1px solid rgba(255,255,255,0.08);
+            padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
+            display: flex; align-items: center; gap: 6px; transition: background .15s;
+        }
+        .nav-pill:hover { background: #334155; }
+        .nav-pill.active { background: #0284c7; color: #fff; border-color: #0284c7; }
+
+        /* ===== Panel Izquierdo (Capas) ===== */
+        .left-panel {
+            position: absolute; top: 64px; left: 15px; width: 290px; max-height: calc(100vh - 80px);
+            background: rgba(255, 255, 255, 0.97);
+            border-radius: 16px; padding: 18px; z-index: 1900;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); overflow-y: auto; color: #1e293b;
+        }
+        .panel-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #0284c7; margin-bottom: 14px; }
+        .layer-toggle { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 13px; font-weight: 700; color: #0f172a; }
+        .layer-sub { font-size: 11px; color: #64748b; font-weight: 400; margin-top: 1px; }
+
+        .switch { position: relative; display: inline-block; width: 38px; height: 20px; flex-shrink: 0; margin-left: 10px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .25s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .25s; border-radius: 50%; }
+        input:checked + .slider { background-color: #0284c7; }
+        input:checked + .slider:before { transform: translateX(18px); }
+
+        .legend-item { display: flex; align-items: center; font-size: 12px; margin-bottom: 7px; color: #334155; }
+        .legend-color { width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; flex-shrink: 0; }
+        .left-panel .footnote { font-size: 10px; color: #94a3b8; margin-top: 14px; line-height: 1.4; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+
+        /* ===== Panel Derecho (Tablero de indicadores) ===== */
+        .right-panel {
+            position: absolute; top: 64px; right: 15px; width: 360px; max-height: calc(100vh - 80px);
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 16px; padding: 20px; z-index: 1900;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); overflow-y: auto; color: #0f172a;
+        }
+        .dash-header { border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 14px; }
+        .dash-header h2 { margin: 2px 0 0; font-size: 19px; font-weight: 800; color: #0f172a; }
+        .dash-header p { margin: 3px 0 0; font-size: 11px; color: #64748b; }
+
+        .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+        .card-title { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 10px; display: flex; align-items: center; }
+        .card-title span.badge { background: #0284c7; color: white; border-radius: 50%; width: 19px; height: 19px; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; margin-right: 8px; flex-shrink: 0; }
+
+        .chart-box { position: relative; height: 130px; width: 130px; margin: 4px 0; flex-shrink: 0; }
+        .soil-row { display: flex; gap: 14px; align-items: center; }
+        .soil-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .soil-table td { padding: 3px 0; vertical-align: middle; }
+        .soil-table .lbl { display: flex; align-items: center; color: #334155; font-weight: 600; }
+        .soil-table .dot { width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
+        .soil-table .num { text-align: right; color: #0f172a; font-weight: 700; white-space: nowrap; padding-left: 8px; }
+        .soil-table .pct { text-align: right; color: #64748b; font-weight: 700; white-space: nowrap; padding-left: 8px; }
+        .soil-table tr.total-row td { border-top: 1px solid #e2e8f0; padding-top: 6px; font-weight: 800; color: #0f172a; }
+        .card-note { font-size: 11px; color: #475569; margin-top: 10px; line-height: 1.5; }
+
+        .progress-container { margin-bottom: 10px; }
+        .progress-label { display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 4px; font-weight: 700; color: #0f172a; }
+        .progress-bar { height: 7px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 4px; }
+        .subline { display: flex; justify-content: space-between; font-size: 10.5px; color: #64748b; margin: 2px 0 8px; }
+        .subline b { color: #334155; }
+
+        .big-metric { font-size: 26px; font-weight: 800; color: #ef4444; margin: 2px 0 2px; display: flex; align-items: baseline; gap: 6px; }
+        .big-metric .unit { font-size: 11px; font-weight: 500; color: #64748b; }
+        .big-metric .tag { font-size: 10px; font-weight: 700; color: #ef4444; background: #fee2e2; padding: 2px 8px; border-radius: 20px; margin-left: 6px; }
+        .stat-row { display: flex; justify-content: space-between; font-size: 11px; color: #475569; padding: 3px 0; border-bottom: 1px dashed #e2e8f0; }
+        .stat-row:last-of-type { border-bottom: none; }
+        .stat-row b { color: #0f172a; }
+
+        /* Ajustar mapa */
+        .leaflet-top.leaflet-left { top: 60px !important; }
+        .leaflet-control-layers { display: none !important; }
+        .hidden-panel { display: none !important; }
+    </style>
+    <title>Visor Machala</title>
+</head>
+<body>
+
+    <!-- Barra Superior -->
+    <div class="top-navbar">
+        <div class="nav-left">
+            <span id="coordDisplay"><span class="coord-icon">📍</span> EPSG:32717 · UTM 17S</span>
+        </div>
+        <div class="nav-right">
+            <div class="nav-pill" id="btnOSM">🗺️ OSM</div>
+            <div class="nav-pill active" id="btnCapas" onclick="togglePanel('capas')">Capas</div>
+            <div class="nav-pill active" id="btnAnalisis" onclick="togglePanel('analisis')">Análisis</div>
+        </div>
+    </div>
+
+    <!-- Panel Izquierdo: Control de Capas y Leyenda -->
+    <div class="left-panel" id="panelCapas">
+        <div class="panel-title">Capas de Análisis</div>
+
+        <div class="layer-toggle">
+            <div><div>Uso del suelo</div><div class="layer-sub">Parcelas clasificadas</div></div>
+            <label class="switch"><input type="checkbox" id="chk_PARCELAS_3" checked onchange="handleLayerToggle(layer_PARCELAS_3, this.checked)"><span class="slider"></span></label>
+        </div>
+
+        <div class="layer-toggle">
+            <div><div>Lotes urbanos</div><div class="layer-sub">Manzanas del sector</div></div>
+            <label class="switch"><input type="checkbox" id="chk_LOTES_URBANOS_2" onchange="handleLayerToggle(layer_LOTES_URBANOS_2, this.checked)"><span class="slider"></span></label>
+        </div>
+
+        <div class="layer-toggle">
+            <div><div>Equipamientos</div><div class="layer-sub">Educación y salud</div></div>
+            <label class="switch"><input type="checkbox" id="chk_EQUIPAMIENTOS_10" checked onchange="handleLayerToggle(layer_EQUIPAMIENTOS_10, this.checked)"><span class="slider"></span></label>
+        </div>
+
+        <div class="layer-toggle">
+            <div><div>Accesibilidad educativa</div><div class="layer-sub">Buffer 300 m</div></div>
+            <label class="switch"><input type="checkbox" id="chk_buffer_educacion" onchange="handleLayerToggle(layer_cobertura_educacion_300_9, this.checked)"><span class="slider"></span></label>
+        </div>
+
+        <div class="layer-toggle">
+            <div><div>Accesibilidad de salud</div><div class="layer-sub">Buffer 600 m</div></div>
+            <label class="switch"><input type="checkbox" id="chk_buffer_salud" onchange="handleLayerToggle(layer_cobertura_salud_600_8, this.checked)"><span class="slider"></span></label>
+        </div>
+
+        <div class="layer-toggle">
+            <div><div>Red vial</div><div class="layer-sub">Jerarquía vial</div></div>
+            <label class="switch"><input type="checkbox" id="chk_RED_VIAL_4" onchange="handleLayerToggle(layer_RED_VIAL_4, this.checked)"><span class="slider"></span></label>
+        </div>
+
+        <div class="layer-toggle">
+            <div><div>Límite del sector</div><div class="layer-sub">Área de estudio</div></div>
+            <label class="switch"><input type="checkbox" id="chk_poligono_machala_1" checked onchange="handleLayerToggle(layer_poligono_machala_1, this.checked)"><span class="slider"></span></label>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 14px 0;">
+
+        <div class="panel-title">Leyenda · Uso del Suelo</div>
+        <div class="legend-item"><div class="legend-color" style="background:#e6a817;"></div>Residencial</div>
+        <div class="legend-item"><div class="legend-color" style="background:#d62839;"></div>Comercial / servicios</div>
+        <div class="legend-item"><div class="legend-color" style="background:#2563eb;"></div>Equipamiento (educ./salud)</div>
+        <div class="legend-item"><div class="legend-color" style="background:#009e73;"></div>Áreas verdes</div>
+        <div class="legend-item"><div class="legend-color" style="background:#8b5cf6;"></div>Social</div>
+        <div class="legend-item"><div class="legend-color" style="background:#334155;"></div>Red vial</div>
+
+        <div class="footnote">Fuente: parcelas catastrales GAD Machala 2023 · CRS EPSG:32717 (UTM 17S / WGS 84).</div>
+    </div>
+
+    <!-- Panel Derecho: Tablero de Indicadores -->
+    <div class="right-panel" id="panelAnalisis">
+        <div class="dash-header">
+            <div class="panel-title">Tablero de Indicadores</div>
+            <h2>Sector Machala · 95.45 ha</h2>
+            <p>954,479 m² · Población estimada: 16,682 hab</p>
+        </div>
+
+        <!-- 1. Uso del suelo -->
+        <div class="card">
+            <div class="card-title"><span class="badge">1</span> Área y % de ocupación del suelo</div>
+            <div class="soil-row">
+                <div class="chart-box"><canvas id="soilChart"></canvas></div>
+                <table class="soil-table">
+                    <tr><td class="lbl"><span class="dot" style="background:#e6a817;"></span>Residencial</td><td class="num">534,768</td><td class="pct">56.03%</td></tr>
+                    <tr><td class="lbl"><span class="dot" style="background:#d62839;"></span>Comercial/serv.</td><td class="num">181,836</td><td class="pct">19.05%</td></tr>
+                    <tr><td class="lbl"><span class="dot" style="background:#334155;"></span>Red vial</td><td class="num">118,033</td><td class="pct">12.37%</td></tr>
+                    <tr><td class="lbl"><span class="dot" style="background:#2563eb;"></span>Equipamiento</td><td class="num">68,065</td><td class="pct">7.13%</td></tr>
+                    <tr><td class="lbl"><span class="dot" style="background:#009e73;"></span>Áreas verdes</td><td class="num">42,033</td><td class="pct">4.40%</td></tr>
+                    <tr><td class="lbl"><span class="dot" style="background:#8b5cf6;"></span>Social</td><td class="num">9,743</td><td class="pct">1.02%</td></tr>
+                    <tr class="total-row"><td class="lbl">Total</td><td class="num">954,479</td><td class="pct">100%</td></tr>
+                </table>
+            </div>
+            <p class="card-note">El suelo <b>residencial (56.03%)</b> domina el sector; la red vial ocupa el 12.37% y las <b>áreas verdes apenas alcanzan el 4.4%</b>.</p>
+        </div>
+
+        <!-- 2. Accesibilidad -->
+        <div class="card">
+            <div class="card-title"><span class="badge">2</span> Accesibilidad a equipamientos</div>
+
+            <div class="progress-container">
+                <div class="progress-label"><span>🎓 Unidades educativas (radio 300 m)</span><span>44.14%</span></div>
+                <div class="progress-bar"><div class="progress-fill" style="width: 44.14%; background: #f59e0b;"></div></div>
+            </div>
+            <div class="subline"><span>Manzanas servidas <b>64/145</b></span><span>Población cubierta <b>54.8% (9,142 hab)</b></span></div>
+
+            <div class="progress-container">
+                <div class="progress-label"><span>➕ Centros de salud (radio 600 m)</span><span>100%</span></div>
+                <div class="progress-bar"><div class="progress-fill" style="width: 100%; background: #10b981;"></div></div>
+            </div>
+            <div class="subline"><span>Manzanas servidas <b>145/145</b></span><span>Población cubierta <b>100% (16,682 hab)</b></span></div>
+
+            <p class="card-note">Cobertura de salud <b>completa (100%)</b>. En educación quedan <b>81 manzanas sub-servidas</b> (81/145). Activa los buffers en el panel de capas para revisar.</p>
+        </div>
+
+        <!-- 3. Áreas verdes -->
+        <div class="card">
+            <div class="card-title"><span class="badge">3</span> Población servida por áreas verdes</div>
+            <div class="big-metric">2.52 <span class="unit">m²/habitante</span><span class="tag">Bajo el mínimo OMS</span></div>
+            <div class="progress-bar" style="margin: 6px 0 10px;"><div class="progress-fill" style="width: 28%; background: linear-gradient(90deg,#ef4444,#f59e0b);"></div></div>
+            <div class="stat-row"><span>Área verde disponible</span><b>42,033 m²</b></div>
+            <div class="stat-row"><span>Población estimada</span><b>16,682 hab</b></div>
+            <div class="stat-row"><span>Superficie requerida (OMS 9 m²/hab)</span><b>150,138 m²</b></div>
+            <div class="stat-row"><span>Déficit frente a OMS</span><b>108,105 m² (10.81 ha)</b></div>
+            <p class="card-note">El sector ofrece <b>2.52 m²/hab</b>, muy por debajo del mínimo OMS de 9 m²/hab (cumplimiento del <b>28.0%</b>). Se requieren <b>10.81 ha</b> adicionales de área verde.</p>
+        </div>
+
+        <!-- 4. Riesgo de inundación -->
+        <div class="card">
+            <div class="card-title"><span class="badge">4</span> Riesgo de inundación (complementario)</div>
+            <div class="stat-row"><span>Cota del sector</span><b>&lt; 5.0 msnm</b></div>
+            <div class="stat-row"><span>Superficie expuesta</span><b>95.45 ha (100%)</b></div>
+            <div class="stat-row"><span>Población expuesta</span><b>16,682 hab (100%)</b></div>
+            <p class="card-note">Todo el sector se asienta bajo los <b>5 msnm</b>, por lo que la totalidad de la superficie y la población quedan expuestas ante crecidas del sistema hídrico local.</p>
+        </div>
+    </div>
+
+    <!-- Mapa Leaflet principal -->
+    <div id="map"></div>
+
+    <!-- Scripts de QGIS2Web y Leaflet -->
+    <script src="js/qgis2web_expressions.js"></script>
+    <script src="js/leaflet.js"></script>
+    <script src="js/L.Control.Layers.Tree.min.js"></script>
+    <script src="js/L.Control.Locate.min.js"></script>
+    <script src="js/leaflet.rotatedMarker.js"></script>
+    <script src="js/leaflet.pattern.js"></script>
+    <script src="js/leaflet-hash.js"></script>
+    <script src="js/Autolinker.min.js"></script>
+    <script src="js/rbush.min.js"></script>
+    <script src="js/labelgun.min.js"></script>
+    <script src="js/labels.js"></script>
+    <script src="js/leaflet.photon.js"></script>
+    <script src="js/leaflet-measure.js"></script>
+    <script src="data/poligono_machala_1.js"></script>
+    <script src="data/LOTES_URBANOS_2.js"></script>
+    <script src="data/PARCELAS_3.js"></script>
+    <script src="data/RED_VIAL_4.js"></script>
+    <script src="data/areas_verdes_5.js"></script>
+    <script src="data/parcela_cobertura_salud_6.js"></script>
+    <script src="data/parcelas_cobertura_educacion_7.js"></script>
+    <script src="data/cobertura_salud_600_8.js"></script>
+    <script src="data/cobertura_educacion_300_9.js"></script>
+    <script src="data/EQUIPAMIENTOS_10.js"></script>
+    
+    <script>
+    var map = L.map('map', { zoomControl:false, maxZoom:28, minZoom:1 });
+    var hash = new L.Hash(map);
+    map.attributionControl.setPrefix('<a href="https://github.com/qgis2web/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+    var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+
+    /* Función estándar para generar las tablas dentro de las ventanas Popup de qgis2web */
+    function pop_generic(feature, layer) {
+        var popupContent = '<table style="font-size:12px; border-collapse:collapse;">';
+        for (var key in feature.properties) {
+            if (feature.properties[key] !== null) {
+                popupContent += '<tr><td style="font-weight:bold; padding:2px 6px 2px 0;">' + key + ':</td><td style="padding:2px 0;">' + autolinker.link(String(feature.properties[key])) + '</td></tr>';
+            }
+        }
+        popupContent += '</table>';
+        layer.bindPopup(popupContent, {maxHeight: 400});
+    }
+
+    var zoomControl = L.control.zoom({ position: 'topleft' }).addTo(map);
+    L.control.locate({locateOptions: {maxZoom: 19}}).addTo(map);
+    var measureControl = new L.Control.Measure({
+        position: 'topleft',
+        primaryLengthUnit: 'meters',
+        secondaryLengthUnit: 'kilometers',
+        primaryAreaUnit: 'sqmeters',
+        secondaryAreaUnit: 'hectares'
+    });
+    measureControl.addTo(map);
+    document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
+    document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
+    
+    var bounds_group = new L.featureGroup([]);
+    function setBounds() {
+        if (bounds_group.getLayers().length) {
+            map.fitBounds(bounds_group.getBounds());
+        }
+    }
+
+    map.createPane('pane_OpenStreetMap_0');
+    map.getPane('pane_OpenStreetMap_0').style.zIndex = 400;
+    var layer_OpenStreetMap_0 = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        pane: 'pane_OpenStreetMap_0', opacity: 1.0, attribution: '', minZoom: 1, maxZoom: 28, minNativeZoom: 0, maxNativeZoom: 19
+    });
+    map.addLayer(layer_OpenStreetMap_0);
+
+    // Polígono Machala (Área de Estudio)
+    function style_poligono_machala_1_0() { return { pane: 'pane_poligono_machala_1', opacity: 1, color: 'rgba(228,26,28,1.0)', dashArray: '', lineCap: 'square', lineJoin: 'bevel', weight: 3.0, fillOpacity: 0, interactive: true }; }
+    map.createPane('pane_poligono_machala_1');
+    map.getPane('pane_poligono_machala_1').style.zIndex = 401;
+    var layer_poligono_machala_1 = new L.geoJson(json_poligono_machala_1, { 
+        pane: 'pane_poligono_machala_1', 
+        style: style_poligono_machala_1_0,
+        onEachFeature: pop_generic 
+    });
+    bounds_group.addLayer(layer_poligono_machala_1);
+    map.addLayer(layer_poligono_machala_1);
+
+    // Lotes Urbanos
+    function style_LOTES_URBANOS_2_0() { return { pane: 'pane_LOTES_URBANOS_2', opacity: 1, color: 'rgba(35,35,35,1.0)', weight: 1.0, fill: true, fillOpacity: 1, fillColor: 'rgba(191,191,191,1.0)', interactive: true }; }
+    map.createPane('pane_LOTES_URBANOS_2');
+    map.getPane('pane_LOTES_URBANOS_2').style.zIndex = 402;
+    var layer_LOTES_URBANOS_2 = new L.geoJson(json_LOTES_URBANOS_2, { 
+        pane: 'pane_LOTES_URBANOS_2', 
+        style: style_LOTES_URBANOS_2_0,
+        onEachFeature: pop_generic 
+    });
+
+    // Parcelas
+    function style_PARCELAS_3_0(feature) {
+        switch(String(feature.properties['USO_SUELO'])) {
+            case 'AREAS VERDES': return { pane: 'pane_PARCELAS_3', opacity: 1, color: 'rgba(35,35,35,1.0)', weight: 1.0, fill: true, fillOpacity: 1, fillColor: 'rgba(0,158,115,1.0)' };
+            case 'COMERCIAL': return { pane: 'pane_PARCELAS_3', opacity: 1, color: 'rgba(35,35,35,1.0)', weight: 1.0, fill: true, fillOpacity: 1, fillColor: 'rgba(230,159,0,1.0)' };
+            case 'EQUIPAMIENTO': return { pane: 'pane_PARCELAS_3', opacity: 1, color: 'rgba(35,35,35,1.0)', weight: 1.0, fill: true, fillOpacity: 1, fillColor: 'rgba(86,180,233,1.0)' };
+            case 'RESIDENCIAL': return { pane: 'pane_PARCELAS_3', opacity: 1, color: 'rgba(35,35,35,1.0)', weight: 1.0, fill: true, fillOpacity: 1, fillColor: 'rgba(240,228,66,1.0)' };
+            case 'SOCIAL': return { pane: 'pane_PARCELAS_3', opacity: 1, color: 'rgba(35,35,35,1.0)', weight: 1.0, fill: true, fillOpacity: 1, fillColor: 'rgba(145,128,219,1.0)' };
+            default: return { pane: 'pane_PARCELAS_3', opacity: 1, color: 'rgba(35,35,35,1.0)', weight: 1.0, fill: true, fillOpacity: 1, fillColor: 'rgba(200,200,200,1.0)' };
+        }
+    }
+    map.createPane('pane_PARCELAS_3');
+    map.getPane('pane_PARCELAS_3').style.zIndex = 403;
+    var layer_PARCELAS_3 = new L.geoJson(json_PARCELAS_3, { 
+        pane: 'pane_PARCELAS_3', 
+        style: style_PARCELAS_3_0,
+        onEachFeature: pop_generic 
+    });
+    bounds_group.addLayer(layer_PARCELAS_3);
+    map.addLayer(layer_PARCELAS_3);
+
+    // Red Vial
+    function style_RED_VIAL_4_0(feature) { return { pane: 'pane_RED_VIAL_4', opacity: 1, color: 'rgba(0,0,0,1.0)', weight: 1.5, fillOpacity: 0 }; }
+    map.createPane('pane_RED_VIAL_4');
+    map.getPane('pane_RED_VIAL_4').style.zIndex = 404;
+    var layer_RED_VIAL_4 = new L.geoJson(json_RED_VIAL_4, { 
+        pane: 'pane_RED_VIAL_4', 
+        style: style_RED_VIAL_4_0,
+        onEachFeature: pop_generic 
+    });
+
+    // Buffers Salud y Educación
+    map.createPane('pane_cobertura_salud_600_8');
+    map.getPane('pane_cobertura_salud_600_8').style.zIndex = 408;
+    var layer_cobertura_salud_600_8 = new L.geoJson(json_cobertura_salud_600_8, { 
+        pane: 'pane_cobertura_salud_600_8', 
+        style: function() { return { color: 'rgba(255,0,7,0.8)', weight: 1.5, fill: true, fillOpacity: 0.2, fillColor: 'rgba(255,0,7,0.2)' }; },
+        onEachFeature: pop_generic 
+    });
+
+    map.createPane('pane_cobertura_educacion_300_9');
+    map.getPane('pane_cobertura_educacion_300_9').style.zIndex = 409;
+    var layer_cobertura_educacion_300_9 = new L.geoJson(json_cobertura_educacion_300_9, { 
+        pane: 'pane_cobertura_educacion_300_9', 
+        style: function() { return { color: 'rgba(31,0,255,0.8)', weight: 1.5, fill: true, fillOpacity: 0.2, fillColor: 'rgba(31,0,255,0.2)' }; },
+        onEachFeature: pop_generic 
+    });
+
+    // Equipamientos
+    function style_EQUIPAMIENTOS_10_0(feature) {
+        switch(String(feature.properties['TIPO (EDUCACIÓN/SALUD)'])) {
+            case 'EDUCACION': return { pane: 'pane_EQUIPAMIENTOS_10', radius: 6.0, opacity: 1, color: 'rgba(35,35,35,1.0)', weight: 1, fill: true, fillOpacity: 1, fillColor: 'rgba(31,120,180,1.0)' };
+            case 'SALUD': return { pane: 'pane_EQUIPAMIENTOS_10', radius: 8.0, opacity: 1, color: 'rgba(227,26,28,1.0)', weight: 2.0, fill: true, fillOpacity: 1, fillColor: 'rgba(255,255,255,1.0)' };
+            default: return { pane: 'pane_EQUIPAMIENTOS_10', radius: 6.0, opacity: 1, color: 'rgba(35,35,35,1.0)', weight: 1, fill: true, fillOpacity: 1, fillColor: 'rgba(100,100,100,1.0)' };
+        }
+    }
+    map.createPane('pane_EQUIPAMIENTOS_10');
+    map.getPane('pane_EQUIPAMIENTOS_10').style.zIndex = 410;
+    var layer_EQUIPAMIENTOS_10 = new L.geoJson(json_EQUIPAMIENTOS_10, {
+        pane: 'pane_EQUIPAMIENTOS_10',
+        pointToLayer: function (feature, latlng) { return L.circleMarker(latlng, style_EQUIPAMIENTOS_10_0(feature)); },
+        onEachFeature: pop_generic
+    });
+    bounds_group.addLayer(layer_EQUIPAMIENTOS_10);
+    map.addLayer(layer_EQUIPAMIENTOS_10);
+
+    setBounds();
+    </script>        
+
+    <!-- JavaScript personalizado para controles e indicadores -->
+    <script>
+        // Función para controlar la adición/remoción limpia de capas
+        function handleLayerToggle(layer, shouldShow) {
+            if (!layer) return;
+            if (shouldShow) {
+                if (!map.hasLayer(layer)) {
+                    map.addLayer(layer);
+                }
+            } else {
+                if (map.hasLayer(layer)) {
+                    map.removeLayer(layer);
+                }
+            }
+        }
+
+        // Mostrar/Ocultar paneles desde la barra superior
+        function togglePanel(which) {
+            var panel = which === 'capas' ? document.getElementById('panelCapas') : document.getElementById('panelAnalisis');
+            var btn = which === 'capas' ? document.getElementById('btnCapas') : document.getElementById('btnAnalisis');
+            panel.classList.toggle('hidden-panel');
+            btn.classList.toggle('active');
+        }
+
+        // Coordenadas del cursor en tiempo real
+        window.addEventListener('load', function() {
+            if (typeof map !== 'undefined') {
+                map.on('mousemove', function(e) {
+                    document.getElementById('coordDisplay').innerHTML =
+                        '<span class="coord-icon">📍</span> ' + e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5);
+                });
+            }
+
+            // Gráfico Donut
+            var ctx = document.getElementById('soilChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Residencial', 'Comercial/serv.', 'Red vial', 'Equipamiento', 'Áreas verdes', 'Social'],
+                    datasets: [{
+                        data: [56.03, 19.05, 12.37, 7.13, 4.40, 1.02],
+                        backgroundColor: ['#e6a817', '#d62839', '#334155', '#2563eb', '#009e73', '#8b5cf6'],
+                        borderWidth: 1,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    cutout: '68%'
+                },
+                plugins: [{
+                    id: 'centerText',
+                    afterDraw: function(chart) {
+                        var w = chart.width, h = chart.height, c = chart.ctx;
+                        c.restore();
+                        c.font = '800 16px -apple-system, sans-serif';
+                        c.fillStyle = '#0f172a';
+                        c.textBaseline = 'middle';
+                        c.textAlign = 'center';
+                        c.fillText('95.45', w / 2, h / 2 - 8);
+                        c.font = '600 9px -apple-system, sans-serif';
+                        c.fillStyle = '#64748b';
+                        c.fillText('hectáreas', w / 2, h / 2 + 10);
+                        c.save();
+                    }
+                }]
+            });
+        });
+    </script>
+</body>
+</html>
